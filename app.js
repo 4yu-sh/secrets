@@ -36,6 +36,7 @@ const userSchema = new mongoose.Schema({
   password: String,
   googleId: String,
   facebookId: String,
+  secret: String,
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -112,10 +113,7 @@ app.get(
   }
 );
 
-app.get(
-  "/auth/facebook",
-  passport.authenticate("facebook")
-);
+app.get("/auth/facebook", passport.authenticate("facebook"));
 
 app.get(
   "/auth/facebook/secrets",
@@ -130,15 +128,20 @@ app.get(
 app.get("/login", function (req, res) {
   res.render("login");
 });
+
 app.get("/register", function (req, res) {
   res.render("register");
 });
 
 app.get("/secrets", function (req, res) {
-  if (req.isAuthenticated()) {
-    res.render("secrets");
-  } else {
-    res.redirect("login");
+  getSecrets();
+  async function getSecrets() {
+    const foundSecrets = await User.find({ secret: { $ne: null } });
+    try {
+      res.render("secrets", { usersWithSecrets: foundSecrets });
+    } catch (error) {
+      console.log(error);
+    }
   }
 });
 
@@ -152,18 +155,30 @@ app.get("/logout", function (req, res) {
   });
 });
 
+app.get("/submit", function (req, res) {
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+app.post("/submit", function (req, res) {
+  const submittedSecret = req.body.secret;
+  console.log(submittedSecret);
+
+  submitSecret();
+  async function submitSecret() {
+    const userExists = await User.findById(req.user.id);
+    userExists.secret = submittedSecret;
+    userExists.save();
+    res.redirect("/secrets");
+  }
+});
+
 app.post("/register", function (req, res) {
   userAdd();
   async function userAdd() {
-    // bcrypt.hash(req.body.password, saltrounds, function (err, hash) {
-    //   const newUser = new User({
-    //     email: req.body.username,
-    //     password: hash,
-    //   });
-    //   newUser.save();
-    //   res.render("secrets");
-    // });
-
     User.register(
       { username: req.body.username },
       req.body.password,
@@ -184,17 +199,6 @@ app.post("/register", function (req, res) {
 app.post("/login", function (req, res) {
   userCheck();
   async function userCheck() {
-    // const email = req.body.username;
-    // const password = req.body.password; //this still works withou using bcrypt & it was the same for the md5 hashing and also mongoose encrption.
-
-    // User.exists({ email: email }, { password: password }).then((exists) => {
-    //   if (exists) {
-    //     res.render("secrets");
-    //   } else {
-    //     res.render("login");
-    //   }
-    // });
-
     const user = new User({
       username: req.body.username,
       password: req.body.password,
